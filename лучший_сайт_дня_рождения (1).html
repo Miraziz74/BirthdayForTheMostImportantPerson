@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>С Днём Рождения, donejka!</title>
+<style>
+  :root{--bg1:#0b1020;--bg2:#1a0b2e}
+  html,body{height:100%;}
+  body {
+    margin: 0;
+    padding: 0;
+    background: linear-gradient(120deg,var(--bg1),var(--bg2));
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    overflow: hidden;
+    font-family: Inter, Arial, sans-serif;
+    color: white;
+    text-align: center;
+  }
+  #revealBtn {
+    padding: 22px 44px;
+    font-size: 30px;
+    border: none;
+    border-radius: 16px;
+    cursor: pointer;
+    background: linear-gradient(45deg, #ff00cc, #ff9900);
+    color: #fff;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.6), 0 6px 20px rgba(255,0,150,0.12) inset;
+    transition: transform .25s ease, filter .25s ease;
+  }
+  #revealBtn:hover{transform:scale(1.06);filter:brightness(1.05)}
+  #message{
+    position: absolute; top: 20vh; left: 50%; transform: translateX(-50%);
+    max-width: 90%; font-size: 36px; line-height:1.2; opacity:0;
+    text-shadow: 0 6px 30px rgba(0,0,0,0.6);
+  }
+  /* overlays */
+  canvas#effects{position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:50}
+  .heart3d{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:240px;height:240px;z-index:5;pointer-events:none;opacity:0.35;filter:blur(2px);}
+  /* animated neon text style when revealed */
+  .glow{animation: glowText 1.8s infinite alternate; font-weight:700}
+  @keyframes glowText{from{filter:drop-shadow(0 0 8px rgba(255,0,150,0.8))}to{filter:drop-shadow(0 0 30px rgba(255,200,0,0.9))}}
+  /* small floating rose/heart/flower elements will be created dynamically */
+</style>
+</head>
+<body>
+
+<button id="revealBtn" aria-label="Нажми на меня">Нажми на меня</button>
+<div id="message" role="status" aria-live="polite"></div>
+<canvas id="effects"></canvas>
+<div class="heart3d" id="heart3d" aria-hidden="true"></div>
+<audio id="music" src="" preload="none"></audio>
+
+<script>
+// === Helper utilities ===
+const $ = (id)=>document.getElementById(id);
+const canvas = $('effects');
+const ctx = canvas.getContext('2d');
+let W = canvas.width = innerWidth;
+let H = canvas.height = innerHeight;
+window.addEventListener('resize', ()=>{W=canvas.width=innerWidth; H=canvas.height=innerHeight});
+
+// === Fireworks engine ===
+const fireworks = [];
+function launchFirework(x = Math.random()*(W*0.8)+W*0.1, y = Math.random()*H*0.4 + H*0.1){
+  // create rocket
+  const hue = Math.floor(Math.random()*360);
+  const vx = (Math.random()-0.5)*2;
+  const vy = - (3 + Math.random()*5);
+  const rocket = {x: x, y: H+10, vx: vx, vy: vy, age:0, hue:hue, exploded:false, particles:[]};
+  fireworks.push(rocket);
+}
+
+function explode(rocket){
+  const count = 30 + Math.floor(Math.random()*60);
+  for(let i=0;i<count;i++){
+    const angle = Math.random()*Math.PI*2;
+    const speed = Math.random()*4 + 1.5;
+    const p = {
+      x: rocket.x,
+      y: rocket.y,
+      vx: Math.cos(angle)*speed + (Math.random()-0.5)*0.6,
+      vy: Math.sin(angle)*speed + (Math.random()-0.5)*0.6,
+      life: 60 + Math.floor(Math.random()*60),
+      age:0,
+      hue: (rocket.hue + Math.floor(Math.random()*60)-30)
+    };
+    rocket.particles.push(p);
+  }
+  rocket.exploded = true;
+}
+
+function drawFireworks(){
+  ctx.clearRect(0,0,W,H);
+  // update rockets
+  for(let i=fireworks.length-1;i>=0;i--){
+    const r = fireworks[i];
+    if(!r.exploded){
+      r.vy += -0.06; // gravity negative because vy is up
+      r.x += r.vx;
+      r.y += r.vy;
+      r.age++;
+      // draw rocket
+      ctx.beginPath(); ctx.fillStyle = `hsl(${r.hue} 100% 60%)`; ctx.arc(r.x, r.y, 3,0,Math.PI*2); ctx.fill();
+      if(r.vy > -0.5 || r.age>200){ explode(r); }
+    } else {
+      // particles
+      for(let j=r.particles.length-1;j>=0;j--){
+        const p = r.particles[j];
+        p.vy += 0.06; // gravity
+        p.vx *= 0.99; p.vy *= 0.99;
+        p.x += p.vx; p.y += p.vy; p.age++;
+        const t = p.age / p.life;
+        ctx.beginPath();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = `hsla(${p.hue} 100% 60% ${1 - t})`;
+        ctx.arc(p.x, p.y, Math.max(1, 3*(1-t)), 0, Math.PI*2);
+        ctx.fill();
+        if(p.age > p.life){ r.particles.splice(j,1); }
+      }
+      if(r.particles.length===0){ fireworks.splice(i,1); }
+    }
+  }
+}
+
+(function anim(){ drawFireworks(); requestAnimationFrame(anim); })();
+
+// convenience: burst many
+function burstAt(x,y,n=8,delay=0){ for(let i=0;i<n;i++) setTimeout(()=>launchFirework(x,y), i*delay); }
+
+// === Confetti (DOM squares) ===
+function spawnConfetti(){
+  const colors = ['#FF5C8A','#FFD166','#6B8BFF','#6EE7B7','#F472B6','#FFC857'];
+  const frag = document.createDocumentFragment();
+  for(let i=0;i<120;i++){
+    const el = document.createElement('div');
+    const size = 6 + Math.random()*12;
+    el.style.position='fixed'; el.style.left = Math.random()*100 + 'vw'; el.style.top='-10vh';
+    el.style.width = size+'px'; el.style.height = (size*1.4)+'px';
+    el.style.background = colors[Math.floor(Math.random()*colors.length)];
+    el.style.transform = `rotate(${Math.random()*360}deg)`;
+    el.style.opacity = 0.95; el.style.zIndex=60; el.style.pointerEvents='none';
+    el.style.transition = `top ${3+Math.random()*3}s linear, transform ${3+Math.random()*3}s linear, opacity ${3+Math.random()*3}s linear`;
+    frag.appendChild(el);
+    // animate
+    requestAnimationFrame(()=>{ setTimeout(()=>{ el.style.top = (110 + Math.random()*20) + 'vh'; el.style.transform = `rotate(${Math.random()*720}deg) translateY(20px)`; el.style.opacity=0.95-Math.random()*0.6 }, 20 + Math.random()*200)});
+    setTimeout(()=>el.remove(), 7000 + Math.random()*3000);
+  }
+  document.body.appendChild(frag);
+}
+
+// === Sparkles / particles on DOM ===
+function spawnSparkles(){
+  const count = 40;
+  for(let i=0;i<count;i++){
+    const s = document.createElement('div');
+    s.style.position='fixed'; s.style.left = Math.random()*100 + 'vw'; s.style.top = Math.random()*100 + 'vh';
+    const size = 4 + Math.random()*8; s.style.width = s.style.height = size + 'px'; s.style.borderRadius='50%';
+    s.style.background = 'white'; s.style.opacity='0.9'; s.style.zIndex=55; s.style.pointerEvents='none';
+    s.style.transition = 'transform 1.2s ease, opacity 1.2s ease';
+    document.body.appendChild(s);
+    requestAnimationFrame(()=>{ s.style.transform = `translateY(${ -40 - Math.random()*80 }px) scale(${0.4+Math.random()*1.2})`; s.style.opacity='0'; });
+    setTimeout(()=>s.remove(), 1600 + Math.random()*800);
+  }
+}
+
+// === Floating hearts and roses (DOM emoji) ===
+function spawnHeartsAndRoses(){
+  const emojis = ['❤️','💖','🌹','💫','✨'];
+  for(let i=0;i<18;i++){
+    setTimeout(()=>{
+      const el = document.createElement('div'); el.textContent = emojis[Math.floor(Math.random()*emojis.length)];
+      el.style.position='fixed'; el.style.left = (5 + Math.random()*90) + 'vw'; el.style.top = '110vh';
+      el.style.fontSize = (18 + Math.random()*44) + 'px'; el.style.zIndex=62; el.style.pointerEvents='none'; el.style.transition = `transform ${4+Math.random()*4}s linear, top ${4+Math.random()*4}s linear, opacity ${3+Math.random()*4}s linear`;
+      document.body.appendChild(el);
+      requestAnimationFrame(()=>{ setTimeout(()=>{ el.style.top = '-20vh'; el.style.transform = `translateX(${ -40 + Math.random()*80 }px) rotate(${Math.random()*720-360}deg)`; el.style.opacity='0'; }, 20); });
+      setTimeout(()=>el.remove(), 8000);
+    }, i*120);
+  }
+}
+
+// === Rainbow flash overlay ===
+let rainbowInterval;
+function startRainbowFlashes(){
+  const overlay = document.createElement('div'); overlay.style.position='fixed'; overlay.style.left=0; overlay.style.top=0; overlay.style.width='100vw'; overlay.style.height='100vh'; overlay.style.pointerEvents='none'; overlay.style.mixBlendMode='screen'; overlay.style.zIndex=48;
+  document.body.appendChild(overlay);
+  rainbowInterval = setInterval(()=>{
+    overlay.style.transition='background .35s linear';
+    overlay.style.background = `radial-gradient(circle at ${Math.random()*100}% ${Math.random()*100}%, rgba(${Math.floor(Math.random()*255)},${Math.floor(Math.random()*255)},${Math.floor(Math.random()*255)},0.22), transparent 30%)`;
+  }, 250);
+  // remove after some time automatically
+  setTimeout(()=>{ clearInterval(rainbowInterval); overlay.remove(); }, 22000);
+}
+
+// === Light rays ===
+function spawnLightRays(){
+  const container = document.createElement('div'); container.style.position='fixed'; container.style.left=0; container.style.top=0; container.style.width='100vw'; container.style.height='100vh'; container.style.overflow='visible'; container.style.pointerEvents='none'; container.style.zIndex=46;
+  for(let i=0;i<14;i++){
+    const ray = document.createElement('div');
+    ray.style.position='absolute'; ray.style.left='50%'; ray.style.top='50%'; ray.style.width='6px'; ray.style.height='120vh'; ray.style.background='linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.02))'; ray.style.transformOrigin='top center'; ray.style.transform = `translateX(-50%) rotate(${i*(360/14)}deg)`; ray.style.filter='blur(6px)'; ray.style.opacity='0.0'; ray.style.transition='opacity 1.6s ease-in-out'; container.appendChild(ray);
+    setTimeout(()=>{ ray.style.opacity = 0.6*Math.random()+0.3; }, 200+i*100);
+    setInterval(()=>{ ray.style.opacity = 0.2 + Math.random()*0.8; }, 1400 + Math.random()*800);
+  }
+  document.body.appendChild(container);
+  setTimeout(()=>container.remove(), 21000);
+}
+
+// === 3D heart (CSS transform illusion) ===
+function create3DHeart(){
+  const h = $('heart3d');
+  h.style.width='240px'; h.style.height='240px';
+  // create multiple layers for depth
+  for(let i=0;i<6;i++){
+    const layer = document.createElement('div');
+    layer.style.position='absolute'; layer.style.inset='0'; layer.style.borderRadius='50% 50% 50% 50% / 60% 60% 40% 40%';
+    layer.style.background = `radial-gradient(circle at ${30+i*6}% ${30+i*3}%, rgba(255,${80+i*20},${80+i*20},${0.9 - i*0.1}), rgba(255,${30+i*10},${30+i*6},${0.3 - i*0.04}))`;
+    layer.style.transform = `translateZ(${ -i*6 }px)`; layer.style.filter='blur(0.6px)'; layer.style.opacity = 0.95 - i*0.08;
+    h.appendChild(layer);
+  }
+  h.style.transition='transform 6s linear';
+  let angle = 0; setInterval(()=>{ angle+=0.6; h.style.transform = `translate(-50%,-50%) rotateY(${angle}deg)`; }, 60);
+}
+
+// === Music play (user may provide a file by replacing src or leave empty) ===
+const music = $('music');
+function playMusic(){ if(music.src){ music.volume = 0.6; music.currentTime = 0; music.play().catch(()=>{}); } }
+
+// === Text typing animation ===
+function typeMessage(text, el, speed=28){ el.innerHTML=''; let i=0; const tmr = setInterval(()=>{ el.innerHTML += text[i]; i++; if(i>=text.length) clearInterval(tmr); }, speed); }
+
+// === Main reveal sequence ===
+async function revealAll(){
+  // hide button
+  const btn = $('revealBtn'); btn.disabled = true; btn.style.transform='scale(.9)';
+  setTimeout(()=>btn.style.display='none',300);
+
+  // play music if available
+  playMusic();
+
+  // big bursts of fireworks
+  for(let i=0;i<6;i++){ setTimeout(()=>{ launchFirework(W*0.2 + Math.random()*(W*0.6)); }, i*500); }
+  setTimeout(()=>{ for(let i=0;i<8;i++) setTimeout(()=>launchFirework(), i*120); }, 1800);
+
+  // confetti DOM
+  setTimeout(spawnConfetti,400);
+  setTimeout(()=>{ spawnSparkles(); spawnHeartsAndRoses(); }, 300);
+  setTimeout(startRainbowFlashes, 600);
+  setTimeout(spawnLightRays, 500);
+  create3DHeart();
+
+  // continuous smaller fireworks for atmosphere
+  const fwLoop = setInterval(()=>{ launchFirework(W*0.15+Math.random()*(W*0.7)); if(Math.random()>0.8) spawnSparkles(); }, 900);
+  setTimeout(()=>clearInterval(fwLoop), 23000);
+
+  // second wave of confetti and particle showers
+  setTimeout(()=>{ spawnConfetti(); spawnHeartsAndRoses(); burstAt(W*0.5,H*0.3,6,80); }, 3800);
+
+  // show typed congratulation
+  const message = $('message');
+  const text = `🎉🎂 Поздравляю тебя с Днём Рождения! 🎂🎉\n\nПусть каждый день приносит радость, смех и маленькие чудеса. Желаю крепкого здоровья, невероятных успехов и любви вокруг — сейчас и всегда! ✨`;
+  setTimeout(()=>{ message.style.opacity=1; message.classList.add('glow'); typeMessage(text, message, 18); }, 1000);
+
+  // big multi-salute
+  setTimeout(()=>{ for(let i=0;i<12;i++){ setTimeout(()=>launchFirework(W*0.1+Math.random()*(W*0.8)), i*220); } }, 5200);
+
+  // final long confetti rain
+  setTimeout(()=>{ spawnConfetti(); setInterval(spawnConfetti, 2700); }, 9000);
+
+  // accessibility: re-enable button after show so user can replay
+  setTimeout(()=>{ const b = document.createElement('button'); b.textContent='Смотреть ещё раз'; b.style.position='fixed'; b.style.left='16px'; b.style.bottom='16px'; b.style.zIndex=70; b.onclick = ()=>{ location.reload(); }; document.body.appendChild(b); }, 14000);
+}
+
+// wire up button
+$('revealBtn').addEventListener('click', revealAll);
+
+// make sure no orphan references exist and launchFirework defined — fixed the original ReferenceError
+
+// If the user wants music, they can set music.src (e.g., 'happy_birthday.mp3') or leave empty.
+// For convenience, try to load a built-in web-safe melody as fallback (generated data URL) - short beep loop
+(function tryFallbackAudio(){
+  if(!music.src){
+    // tiny embedded silent audio to avoid autoplay restrictions later; leave empty intentionally
+  }
+})();
+
+// user-friendly tip in console
+console.log('Birthday page ready. Click the button to run the show.');
+</script>
+</body>
+</html>
